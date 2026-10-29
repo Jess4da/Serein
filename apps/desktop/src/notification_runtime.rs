@@ -21,9 +21,32 @@ pub struct Runtime {
 	options: Device,
 	was_audible: bool,
 	ring: Option<((Id, Sound), Instant)>,
+	ptt: PttCues,
 	badge: Option<u32>,
 	badge_check: Option<Instant>,
 	badge_status: &'static str,
+}
+/// Push-to-talk edges: one start cue per press and one stop cue per release.
+#[derive(Default)]
+struct PttCues {
+	active: bool,
+}
+impl PttCues {
+	/// `mode` is the push-to-talk setting, `in_call` a live voice session and `held` the key.
+	/// A state without a live push-to-talk session resets silently: ending the call or turning
+	/// the mode off while holding is not a key release and must not cue.
+	fn update(&mut self, mode: bool, in_call: bool, held: bool) -> Option<Sound> {
+		if !(mode && in_call) {
+			self.active = false;
+			return None;
+		}
+		let active = std::mem::replace(&mut self.active, held);
+		(active != held).then_some(if held {
+			Sound::PttStart
+		} else {
+			Sound::PttStop
+		})
+	}
 }
 impl Runtime {
 	fn ring_cue(&mut self, ringing: Option<(Id, Sound)>, now: Instant) -> Option<Sound> {
@@ -46,6 +69,15 @@ impl Runtime {
 			}
 		}
 		None
+	}
+	/// Queues one local push-to-talk cue per key edge, through the same preview path as the
+	/// mute/deafen cues.
+	pub fn ptt(&mut self, mode: bool, in_call: bool, held: bool, ui: &mut ui::MessagingUi) {
+		if let Some(cue) = self.ptt.update(mode, in_call, held)
+			&& ui.notification_options.allows(cue)
+		{
+			ui.notification_preview = Some(cue);
+		}
 	}
 	pub fn clear(&mut self, window: &winit::window::Window) {
 		self.sounds.stop();
@@ -297,5 +329,24 @@ mod tests {
 		assert_eq!(runtime.ring_cue(None, now + Duration::from_secs(9)), None);
 		assert!(runtime.ring.is_none());
 		assert_eq!(runtime.ring_cue(None, now + Duration::from_secs(15)), None);
+	}
+
+	#[test]
+	fn push_to_talk_cues_fire_once_per_press_and_release() {
+		let mut cues = PttCues::default();
+		assert_eq!(cues.update(true, true, false), None);
+		assert_eq!(cues.update(true, true, true), Some(Sound::PttStart));
+		for _ in 0..50 {
+			assert_eq!(cues.update(true, true, true), None);
+		}
+		assert_eq!(cues.update(true, true, false), Some(Sound::PttStop));
+		assert_eq!(cues.update(true, true, false), None);
+		// Ending the call while held or turning the mode off is not a key release.
+		assert_eq!(cues.update(true, true, true), Some(Sound::PttStart));
+		assert_eq!(cues.update(true, false, false), None);
+		assert_eq!(cues.update(true, true, false), None);
+		assert_eq!(cues.update(true, true, true), Some(Sound::PttStart));
+		assert_eq!(cues.update(false, true, false), None);
+		assert_eq!(cues.update(true, true, false), None);
 	}
 }
