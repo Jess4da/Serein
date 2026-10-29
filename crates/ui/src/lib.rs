@@ -6195,6 +6195,36 @@ mod composer_tests {
 				.is_some_and(|draft| draft.ends_with('c')),
 			"the diagnostic shortcut leaves normal typing intact"
 		);
+		// An F-key still qualifies while text entry has focus.
+		let output = ctx.run_ui(
+			egui::RawInput {
+				focused: true,
+				events: vec![egui::Event::Key {
+					key: egui::Key::F12,
+					physical_key: None,
+					pressed: true,
+					repeat: false,
+					modifiers: egui::Modifiers::NONE,
+				}],
+				screen_rect: Some(egui::Rect::from_min_size(
+					egui::Pos2::ZERO,
+					egui::vec2(900.0, 600.0),
+				)),
+				..Default::default()
+			},
+			|ui| {
+				view.show(ui, &mut state);
+			},
+		);
+		assert!(
+			output
+				.platform_output
+				.commands
+				.iter()
+				.any(|command| matches!(command, egui::OutputCommand::CopyText(_))),
+			"the F-key diagnostics chord works while typing"
+		);
+		output.drop_without_applying_deltas();
 	}
 
 	#[test]

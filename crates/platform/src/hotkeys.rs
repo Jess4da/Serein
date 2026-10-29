@@ -303,13 +303,15 @@ impl Hotkeys {
 				failed = true;
 				continue;
 			};
-			// Cmd/Ctrl variants can translate to the same native hotkey; registering the
-			// duplicate would fail and turn the status INVALID. The first action keeps it.
-			if self
+			// Cmd/Ctrl variants can translate to the same native hotkey. A same-action alias
+			// is redundant, while a collision with another action leaves that action's
+			// chord focused-only and reports the configuration as invalid.
+			if let Some((_, registered, _)) = self
 				.registered
 				.iter()
-				.any(|(existing, ..)| existing == &hotkey)
+				.find(|(existing, ..)| existing == &hotkey)
 			{
+				failed |= *registered != *action;
 				continue;
 			}
 			match manager.register(hotkey) {
@@ -467,10 +469,20 @@ async fn portal(
 	// One action can now own several chords, so each binding gets its own shortcut id and bit.
 	let mut ids = Vec::with_capacity(bindings.len());
 	let mut shortcuts = Vec::with_capacity(bindings.len());
+	let mut requested_triggers: Vec<String> = Vec::with_capacity(bindings.len());
 	for (index, (action, chord)) in bindings.iter().enumerate() {
 		let Some(trigger) = portal_trigger(chord) else {
 			continue;
 		};
+		// Equivalent chords translate to one trigger. Binding it once keeps a single press
+		// from toggling mute/deafen twice through the XOR accumulator.
+		if requested_triggers
+			.iter()
+			.any(|requested| requested == &trigger)
+		{
+			continue;
+		}
+		requested_triggers.push(trigger.clone());
 		let id = format!("serein-{index}");
 		ids.push((id.clone(), *action, index as u32, chord.clone()));
 		shortcuts.push(
@@ -823,14 +835,31 @@ mod mouse {
 					_ => 0,
 				}
 			});
-			let chords = bindings.to_vec();
+			// Only mouse chords are polled, so keyboard chords never count as global here.
+			let chords: Vec<_> = bindings
+				.iter()
+				.filter(|(_, chord)| button(&chord.key).is_some())
+				.cloned()
+				.collect();
+			// One group per action and physical button; modifier variants within a group OR.
+			let mut toggle_groups: Vec<(KeybindAction, VIRTUAL_KEY)> = Vec::new();
+			for (action, button, _) in &watched {
+				if matches!(
+					action,
+					KeybindAction::ToggleMute | KeybindAction::ToggleDeafen
+				) && !toggle_groups.iter().any(|(group_action, group_button)| {
+					group_action == action && group_button.0 == button.0
+				}) {
+					toggle_groups.push((*action, *button));
+				}
+			}
 			let stop = Arc::new(AtomicBool::new(false));
 			let stopped = stop.clone();
 			let thread = std::thread::Builder::new()
 				.name("serein-mouse-keybinds".into())
 				.spawn(move || {
 					let mut held = vec![false; watched.len()];
-					let mut held_toggles = [false; 2];
+					let mut held_toggles = vec![false; toggle_groups.len()];
 					while !stopped.load(Ordering::Relaxed) {
 						let next: Vec<bool> = watched
 							.iter()
@@ -841,7 +870,7 @@ mod mouse {
 						for (index, ((action, ..), (was, now))) in
 							watched.iter().zip(held.iter().zip(&next)).enumerate()
 						{
-							// Overlapping toggle chords fold into one transition below.
+							// Toggle chords fold into one transition per button below.
 							if was != now
 								&& !matches!(
 									action,
@@ -850,17 +879,15 @@ mod mouse {
 								native.apply(MOUSE_ID + index as u32, *action, *now);
 							}
 						}
-						for (slot, action) in [
-							(0, KeybindAction::ToggleMute),
-							(1, KeybindAction::ToggleDeafen),
-						] {
-							let down = watched
-								.iter()
-								.zip(&next)
-								.any(|((watched, ..), down)| *watched == action && *down);
-							if down != held_toggles[slot] {
-								held_toggles[slot] = down;
-								native.apply(MOUSE_ID + 8 + slot as u32, action, down);
+						for (group, (action, button)) in toggle_groups.iter().enumerate() {
+							let down = watched.iter().zip(&next).any(
+								|((watched, watched_button, _), down)| {
+									watched == action && watched_button.0 == button.0 && *down
+								},
+							);
+							if down != held_toggles[group] {
+								held_toggles[group] = down;
+								native.apply(MOUSE_ID + 64 + group as u32, *action, down);
 							}
 						}
 						held = next;
