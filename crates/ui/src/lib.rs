@@ -505,7 +505,7 @@ pub struct MessagingUi {
 	pub voice_preview_status: &'static str,
 	/// Device-local application shortcuts; the desktop host mirrors the global binding.
 	pub keybinds: model::Keybinds,
-	keybind_capture: Option<model::KeybindAction>,
+	keybind_capture: Option<crate::keybinds::CaptureTarget>,
 	pub global_keybind_status: &'static str,
 	/// Server folders the owner left open; restored from device preferences at startup.
 	pub expanded_folders: Vec<u64>,
@@ -667,11 +667,14 @@ impl MessagingUi {
 
 	/// Text entry suppresses held keys, but a held mouse button is never typing.
 	fn voice_hold_down(&self, ctx: &egui::Context, action: model::KeybindAction) -> bool {
-		let chord = self.keybinds.chord(action);
-		if !model::keybinds::is_mouse_button(&chord.key) && ctx.egui_wants_keyboard_input() {
-			return false;
-		}
-		ctx.input(|input| input.focused && crate::keybinds::down(input, chord))
+		let wants_keyboard = ctx.egui_wants_keyboard_input();
+		ctx.input(|input| {
+			input.focused
+				&& self.keybinds.chords(action).any(|chord| {
+					(!wants_keyboard || model::keybinds::is_mouse_button(&chord.key))
+						&& crate::keybinds::down(input, chord)
+				})
+		})
 	}
 
 	/// Whether egui must see mouse 3–5: one is bound, or a binding is being recorded.
@@ -690,7 +693,9 @@ impl MessagingUi {
 	fn button_claimed(&self, button: egui::PointerButton) -> bool {
 		self.keybind_capture.is_some()
 			|| model::KeybindAction::ALL.into_iter().any(|action| {
-				crate::keybinds::button_from_name(&self.keybinds.chord(action).key) == Some(button)
+				self.keybinds
+					.chords(action)
+					.any(|chord| crate::keybinds::button_from_name(&chord.key) == Some(button))
 			})
 	}
 
@@ -699,21 +704,27 @@ impl MessagingUi {
 		if !ctx.input(|input| input.focused) {
 			return 0;
 		}
-		let wants_kb = ctx.egui_wants_keyboard_input();
+		let wants_keyboard = ctx.egui_wants_keyboard_input();
 		ctx.input_mut(|input| {
 			let mut toggles = 0;
-			let mute_chord = self.keybinds.chord(model::KeybindAction::ToggleMute);
 			if global_mask & 1 == 0
-				&& (!wants_kb || model::keybinds::is_mouse_button(&mute_chord.key))
-				&& crate::keybinds::pressed(input, mute_chord)
-			{
+				&& self
+					.keybinds
+					.chords(model::KeybindAction::ToggleMute)
+					.any(|chord| {
+						(!wants_keyboard || model::keybinds::is_mouse_button(&chord.key))
+							&& crate::keybinds::pressed(input, chord)
+					}) {
 				toggles |= 1;
 			}
-			let deafen_chord = self.keybinds.chord(model::KeybindAction::ToggleDeafen);
 			if global_mask & 2 == 0
-				&& (!wants_kb || model::keybinds::is_mouse_button(&deafen_chord.key))
-				&& crate::keybinds::pressed(input, deafen_chord)
-			{
+				&& self
+					.keybinds
+					.chords(model::KeybindAction::ToggleDeafen)
+					.any(|chord| {
+						(!wants_keyboard || model::keybinds::is_mouse_button(&chord.key))
+							&& crate::keybinds::pressed(input, chord)
+					}) {
 				toggles |= 2;
 			}
 			toggles
@@ -2952,10 +2963,10 @@ impl MessagingUi {
 			&& state.drafts.get(&channel).is_none_or(String::is_empty)
 			&& ctx.input_mut(|input| {
 				!input.events.iter().any(ime_updates_text)
-					&& crate::keybinds::pressed_exact(
-						input,
-						self.keybinds.chord(model::KeybindAction::EditLastMessage),
-					)
+					&& self
+						.keybinds
+						.chords(model::KeybindAction::EditLastMessage)
+						.any(|chord| crate::keybinds::pressed_exact(input, chord))
 			}) && let Some(message) = state
 			.timeline
 			.iter()
@@ -3402,10 +3413,9 @@ impl MessagingUi {
 			&& !ime_this_frame
 			&& ctx.memory(|m| m.has_focus(composer_id))
 			&& ctx.input_mut(|i| {
-				crate::keybinds::pressed_exact(
-					i,
-					self.keybinds.chord(model::KeybindAction::SendMessage),
-				)
+				self.keybinds
+					.chords(model::KeybindAction::SendMessage)
+					.any(|chord| crate::keybinds::pressed_exact(i, chord))
 			});
 		let placeholder = state.channel(channel).map_or_else(
 			|| crate::i18n::translate("composer-placeholder"),
@@ -3606,7 +3616,7 @@ impl MessagingUi {
                         if application_command {
                             return ui.scope(|ui| {
                                 ui.add_enabled_ui(keyboard_enabled, |ui| {
-                                    self.slash_commands.composer(ui, state, channel, self.keybinds.chord(model::KeybindAction::SendMessage));
+                                    self.slash_commands.composer(ui, state, channel, &self.keybinds);
                                 });
                                 if self.slash_commands.active.is_none() {
                                     ctx.memory_mut(|memory| memory.request_focus(composer_id));
@@ -4309,18 +4319,24 @@ impl MessagingUi {
 			.map(|gif| gif.url.clone())
 			.collect();
 		crate::scroll::apply_preferences(ui.ctx(), self.reading_preferences);
-		let diagnostics_chord = self
+		let diagnostics_chords: Vec<model::KeyChord> = self
 			.keybinds
-			.chord(model::KeybindAction::CopyIssueDiagnostics);
-		let diagnostics_function_key = diagnostics_chord
-			.key
-			.strip_prefix('F')
-			.and_then(|number| number.parse::<u8>().ok())
-			.is_some_and(|number| (1..=35).contains(&number));
+			.chords(model::KeybindAction::CopyIssueDiagnostics)
+			.cloned()
+			.collect();
+		let diagnostics_function_key = diagnostics_chords.iter().any(|chord| {
+			chord
+				.key
+				.strip_prefix('F')
+				.and_then(|number| number.parse::<u8>().ok())
+				.is_some_and(|number| (1..=35).contains(&number))
+		});
 		let diagnostics_allowed_in_context = diagnostics_function_key
-			|| diagnostics_chord.modifiers
-				& (model::keybinds::PRIMARY | model::keybinds::CTRL | model::keybinds::ALT)
-				!= 0 || (!ui.ctx().egui_wants_keyboard_input()
+			|| diagnostics_chords.iter().any(|chord| {
+				chord.modifiers
+					& (model::keybinds::PRIMARY | model::keybinds::CTRL | model::keybinds::ALT)
+					!= 0
+			}) || (!ui.ctx().egui_wants_keyboard_input()
 			&& !ui.input(|input| {
 				input
 					.events
@@ -4337,11 +4353,9 @@ impl MessagingUi {
 						.iter()
 						.any(|event| matches!(event, egui::Event::Ime(_)))
 			}) && ui.input_mut(|input| {
-			crate::keybinds::pressed_exact(
-				input,
-				self.keybinds
-					.chord(model::KeybindAction::CopyIssueDiagnostics),
-			)
+			diagnostics_chords
+				.iter()
+				.any(|chord| crate::keybinds::pressed_exact(input, chord))
 		}) {
 			self.copy_diagnostic_info(ui.ctx());
 		}
@@ -4518,11 +4532,9 @@ impl MessagingUi {
 						.iter()
 						.any(|event| matches!(event, egui::Event::Ime(_)))
 			}) && ctx.input_mut(|input| {
-			crate::keybinds::pressed(
-				input,
-				self.keybinds
-					.chord(model::KeybindAction::SwitchConversation),
-			)
+			self.keybinds
+				.chords(model::KeybindAction::SwitchConversation)
+				.any(|chord| crate::keybinds::pressed(input, chord))
 		}) {
 			self.switcher.open(&ctx);
 		}
@@ -4719,11 +4731,9 @@ impl MessagingUi {
 						_ => false,
 					})
 			}) && ctx.input_mut(|input| {
-			crate::keybinds::pressed_exact(
-				input,
-				self.keybinds
-					.chord(model::KeybindAction::SearchConversation),
-			)
+			self.keybinds
+				.chords(model::KeybindAction::SearchConversation)
+				.any(|chord| crate::keybinds::pressed_exact(input, chord))
 		}) && let Some(channel) = state.selected
 		{
 			self.search.focus_conversation(channel, state);
@@ -5974,7 +5984,9 @@ mod composer_tests {
 		] {
 			view.keybinds.copy_issue_diagnostics =
 				model::KeyChord::new(if assigned { "F12" } else { "" }, 0);
-			view.keybind_capture = capturing.then_some(model::KeybindAction::ToggleMute);
+			view.keybind_capture = capturing.then_some(crate::keybinds::CaptureTarget::BuiltIn(
+				model::KeybindAction::ToggleMute,
+			));
 			view.ime_active = composing;
 			let expected = view.diagnostic_info(&ctx);
 			let output = ctx.run_ui(
@@ -6035,6 +6047,33 @@ mod composer_tests {
 					assert_eq!(view.push_to_mute_down(ui.ctx()), focused);
 					assert!(!view.push_to_talk_down(ui.ctx()));
 				},
+			)
+			.drop_without_applying_deltas();
+		}
+	}
+
+	#[test]
+	fn a_custom_push_to_talk_chord_holds_in_the_focused_window() {
+		let mut view = MessagingUi::default();
+		view.keybinds.custom = vec![model::CustomBinding {
+			action: model::KeybindAction::PushToTalk,
+			chord: model::KeyChord::new("Y", 0),
+		}];
+		let ctx = egui::Context::default();
+		for focused in [true, false] {
+			ctx.run_ui(
+				egui::RawInput {
+					focused,
+					events: vec![egui::Event::Key {
+						key: egui::Key::Y,
+						physical_key: None,
+						pressed: true,
+						repeat: false,
+						modifiers: egui::Modifiers::NONE,
+					}],
+					..Default::default()
+				},
+				|ui| assert_eq!(view.push_to_talk_down(ui.ctx()), focused),
 			)
 			.drop_without_applying_deltas();
 		}
