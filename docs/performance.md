@@ -12,9 +12,9 @@ dependencies on Windows x64 (10.0.26300). Standard release packages use `cargo x
 
 | Metric / method | Baseline | After | Delta |
 | --- | ---: | ---: | ---: |
-| Release executable | 92,304,384 B | 92,313,600 B | +9,216 B (+0.010%) |
-| `dist/` regular-file payload | 96,663,146 B | 96,672,797 B | +9,651 B (+0.010%) |
-| ZIP of `dist/` (`7z a -mx=9`) | 51,902,771 B | 51,906,605 B | +3,834 B (+0.007%) |
+| Release executable | 92,304,384 B | 92,312,576 B | +8,192 B (+0.009%) |
+| `dist/` regular-file payload | 96,663,146 B | 96,671,773 B | +8,627 B (+0.009%) |
+| ZIP of `dist/` (`7z a -mx=9`) | 51,902,771 B | 51,905,895 B | +3,124 B (+0.006%) |
 
 The two byte-original MP3 cues add 3,319 B before packaging. Edge detection keeps one bool,
 the cue reuses the existing notification audio worker, and no new thread, allocation or cache

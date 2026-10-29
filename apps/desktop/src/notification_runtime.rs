@@ -70,13 +70,20 @@ impl Runtime {
 		}
 		None
 	}
-	/// Queues one local push-to-talk cue per key edge, through the same preview path as the
-	/// mute/deafen cues.
-	pub fn ptt(&mut self, mode: bool, in_call: bool, held: bool, ui: &mut ui::MessagingUi) {
+	/// Plays one local push-to-talk cue per key edge. Direct playback keeps the cue in the
+	/// frame that saw the key change and leaves the settings-preview slot to previews.
+	pub fn ptt(
+		&mut self,
+		mode: bool,
+		in_call: bool,
+		held: bool,
+		options: Device,
+		ctx: &eframe::egui::Context,
+	) {
 		if let Some(cue) = self.ptt.update(mode, in_call, held)
-			&& ui.notification_options.allows(cue)
+			&& options.allows(cue)
 		{
-			ui.notification_preview = Some(cue);
+			self.sounds.play(cue, options.volume, ctx);
 		}
 	}
 	pub fn clear(&mut self, window: &winit::window::Window) {
@@ -345,6 +352,12 @@ mod tests {
 		assert_eq!(cues.update(true, true, true), Some(Sound::PttStart));
 		assert_eq!(cues.update(true, false, false), None);
 		assert_eq!(cues.update(true, true, false), None);
+		// Held while connecting stays silent; becoming live mid-hold starts transmission.
+		assert_eq!(cues.update(true, false, true), None);
+		assert_eq!(cues.update(true, false, true), None);
+		assert_eq!(cues.update(true, true, true), Some(Sound::PttStart));
+		assert_eq!(cues.update(true, true, true), None);
+		assert_eq!(cues.update(true, true, false), Some(Sound::PttStop));
 		assert_eq!(cues.update(true, true, true), Some(Sound::PttStart));
 		assert_eq!(cues.update(false, true, false), None);
 		assert_eq!(cues.update(true, true, false), None);
