@@ -466,25 +466,30 @@ async fn portal(
 ) -> Result<bool, ashpd::Error> {
 	use ashpd::desktop::global_shortcuts::{GlobalShortcuts, NewShortcut};
 	use futures_util::StreamExt;
-	// One action can now own several chords, so each binding gets its own shortcut id and bit.
-	let mut ids = Vec::with_capacity(bindings.len());
-	let mut shortcuts = Vec::with_capacity(bindings.len());
-	let mut requested_triggers: Vec<String> = Vec::with_capacity(bindings.len());
-	for (index, (action, chord)) in bindings.iter().enumerate() {
+	// One action can own several chords, so group chords that translate to the same trigger.
+	// A same-action alias shares the bound shortcut; another action's collision stays focused.
+	let mut triggers: Vec<(String, KeybindAction, Vec<KeyChord>)> = Vec::new();
+	for (action, chord) in &bindings {
 		let Some(trigger) = portal_trigger(chord) else {
 			continue;
 		};
-		// Equivalent chords translate to one trigger. Binding it once keeps a single press
-		// from toggling mute/deafen twice through the XOR accumulator.
-		if requested_triggers
-			.iter()
-			.any(|requested| requested == &trigger)
+		match triggers
+			.iter_mut()
+			.find(|(existing, ..)| existing == &trigger)
 		{
-			continue;
+			Some((_, owner, group)) => {
+				if *owner == *action {
+					group.push(chord.clone());
+				}
+			}
+			None => triggers.push((trigger, *action, vec![chord.clone()])),
 		}
-		requested_triggers.push(trigger.clone());
+	}
+	let mut ids = Vec::with_capacity(triggers.len());
+	let mut shortcuts = Vec::with_capacity(triggers.len());
+	for (index, (trigger, action, group_chords)) in triggers.iter().enumerate() {
 		let id = format!("serein-{index}");
-		ids.push((id.clone(), *action, index as u32, chord.clone()));
+		ids.push((id.clone(), *action, index as u32, group_chords.clone()));
 		shortcuts.push(
 			NewShortcut::new(id, portal_description(*action)).preferred_trigger(trigger.as_str()),
 		);
@@ -532,10 +537,11 @@ async fn portal(
 	*chords.lock().expect("portal chords poisoned") = response
 		.shortcuts()
 		.iter()
-		.filter_map(|shortcut| {
-			ids.iter()
-				.find(|(id, ..)| id.as_str() == shortcut.id())
-				.map(|(_, action, _, chord)| (*action, chord.clone()))
+		.filter_map(|shortcut| ids.iter().find(|(id, ..)| id.as_str() == shortcut.id()))
+		.flat_map(|(_, action, _, group_chords)| {
+			group_chords
+				.iter()
+				.map(move |chord| (*action, chord.clone()))
 		})
 		.collect();
 	status.store(
