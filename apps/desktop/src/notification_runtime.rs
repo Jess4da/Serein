@@ -18,6 +18,9 @@ pub enum Alert {
 #[derive(Default)]
 pub struct Runtime {
 	sounds: crate::notification_sounds::Sounds,
+	/// Push-to-talk blips use their own worker, so a press or release neither cuts off a
+	/// message or ring cue nor is cancelled by one.
+	ptt_sounds: crate::notification_sounds::Sounds,
 	options: Device,
 	was_audible: bool,
 	ring: Option<((Id, Sound), Instant)>,
@@ -71,7 +74,8 @@ impl Runtime {
 		None
 	}
 	/// Plays one local push-to-talk cue per key edge. Direct playback keeps the cue in the
-	/// frame that saw the key change and leaves the settings-preview slot to previews.
+	/// frame that saw the key change, leaves the settings-preview slot to previews and uses
+	/// the PTT worker so an ordinary cue cannot cancel it.
 	pub fn ptt(
 		&mut self,
 		mode: bool,
@@ -83,11 +87,12 @@ impl Runtime {
 		if let Some(cue) = self.ptt.update(mode, in_call, held)
 			&& options.allows(cue)
 		{
-			self.sounds.play(cue, options.volume, ctx);
+			self.ptt_sounds.play(cue, options.volume, ctx);
 		}
 	}
 	pub fn clear(&mut self, window: &winit::window::Window) {
 		self.sounds.stop();
+		self.ptt_sounds.stop();
 		self.ring = None;
 		if self.badge.is_some_and(|count| count > 0) {
 			let _ = platform::badge::set(window, 0);
@@ -109,6 +114,7 @@ impl Runtime {
 		let badges = platform::badge::supported() && options.unread_badge;
 		if options != self.options || (self.was_audible && !audible) {
 			self.sounds.stop();
+			self.ptt_sounds.stop();
 			self.options = options;
 		}
 		self.was_audible = audible;
@@ -190,10 +196,15 @@ impl Runtime {
 		} else if let Some(since) = since {
 			ctx.request_repaint_after(Duration::from_secs(1).saturating_sub(since));
 		}
-		ui.notification_sound_status = if self.sounds.status().is_empty() {
-			self.badge_status
+		let sound_status = if self.sounds.status().is_empty() {
+			self.ptt_sounds.status()
 		} else {
 			self.sounds.status()
+		};
+		ui.notification_sound_status = if sound_status.is_empty() {
+			self.badge_status
+		} else {
+			sound_status
 		};
 		alert
 	}
@@ -350,7 +361,7 @@ mod tests {
 		assert_eq!(cues.update(true, true, false), None);
 		// Ending the call while held or turning the mode off is not a key release.
 		assert_eq!(cues.update(true, true, true), Some(Sound::PttStart));
-		assert_eq!(cues.update(true, false, false), None);
+		assert_eq!(cues.update(true, false, true), None);
 		assert_eq!(cues.update(true, true, false), None);
 		// Held while connecting stays silent; becoming live mid-hold starts transmission.
 		assert_eq!(cues.update(true, false, true), None);
