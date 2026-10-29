@@ -196,7 +196,10 @@ impl Runtime {
 		} else if let Some(since) = since {
 			ctx.request_repaint_after(Duration::from_secs(1).saturating_sub(since));
 		}
-		let sound_status = if self.sounds.status().is_empty() {
+		let ptt_error = self.ptt_sounds.error();
+		let sound_status = if !ptt_error.is_empty() {
+			ptt_error
+		} else if self.sounds.status().is_empty() {
 			self.ptt_sounds.status()
 		} else {
 			self.sounds.status()

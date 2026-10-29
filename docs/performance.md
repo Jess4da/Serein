@@ -14,15 +14,15 @@ dependencies on Windows x64 (10.0.26300). Standard release packages use `cargo x
 | --- | ---: | ---: | ---: |
 | Release executable | 92,304,384 B | 92,312,576 B | +8,192 B (+0.009%) |
 | `dist/` regular-file payload | 96,663,146 B | 96,671,773 B | +8,627 B (+0.009%) |
-| ZIP of `dist/` (`7z a -mx=9`) | 51,902,771 B | 51,908,874 B | +6,103 B (+0.012%) |
+| ZIP of `dist/` (`7z a -mx=9`) | 51,902,771 B | 51,908,426 B | +5,655 B (+0.011%) |
 
-The two byte-original MP3 cues add 3,319 B before packaging. Edge detection keeps one bool,
-the cue reuses the existing notification audio worker with a second instance dedicated to the
-two short PTT blips, so an ordinary cue cannot cancel one. The second worker thread starts
-lazily on the first PTT cue; no cache or persistent buffer is added. No CPU, memory or latency
-measurement is claimed: the offline fixture joins no live call and plays no audio. Debug
-`profile_preview` screenshots from both revisions are in
-[the evidence folder](pr-evidence/ptt-sounds/).
+The two byte-original MP3 cues add 3,319 B before packaging. Edge detection keeps one bool and
+no cache. The PTT cues play through a second notification worker, so a press or release neither
+cancels nor is cancelled by a message or ring cue. That worker starts lazily on the first PTT
+cue and keeps one capacity-one channel plus its thread until its `Sounds` value is dropped with
+the app; decoded audio is released after each cue. No CPU, RSS or latency measurement is
+claimed, because the offline fixture joins no call and plays no cue. Debug `profile_preview`
+screenshots from both revisions are in [the evidence folder](pr-evidence/ptt-sounds/).
 
 ## Shared output-format selection — October 24, 2026
 

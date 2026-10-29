@@ -29,6 +29,14 @@ impl Sounds {
 			_ => "",
 		}
 	}
+	/// The failure status alone, so a caller can prefer it over another worker's progress text.
+	pub fn error(&self) -> &'static str {
+		if self.status.load(Ordering::Acquire) == 2 {
+			"Audio output unavailable. Check your system sound settings."
+		} else {
+			""
+		}
+	}
 	pub fn stop(&mut self) {
 		self.generation.fetch_add(1, Ordering::AcqRel);
 		self.status.store(0, Ordering::Release);
