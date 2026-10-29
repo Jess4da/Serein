@@ -1552,7 +1552,7 @@ keybinds-custom-row-remove = Odebrat
 # Context: custom_section
 keybinds-custom-section-add-binding = Přidat zkratku
 # Context: custom_section
-keybinds-custom-section-add-extra-shortcuts-for-any-action-each-key-or-mouse-button-can-only-be-used-once = Přidejte další zkratky pro libovolnou akci. Každou klávesu nebo tlačítko myši lze použít jen jednou.
+keybinds-custom-section-add-extra-shortcuts-for-any-action-each-key-or-mouse-button-combination-can-only-be-used-once = Přidejte další zkratky pro libovolnou akci. Každou kombinaci klávesy nebo tlačítka myši lze použít jen jednou.
 # Context: custom_section
 keybinds-custom-section-custom-bindings = Vlastní zkratky
 # Context: row

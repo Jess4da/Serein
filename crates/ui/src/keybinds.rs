@@ -318,7 +318,7 @@ fn custom_section(
 			design::hint(
 				ui,
 				&crate::i18n::translate(
-					"keybinds-custom-section-add-extra-shortcuts-for-any-action-each-key-or-mouse-button-can-only-be-used-once",
+					"keybinds-custom-section-add-extra-shortcuts-for-any-action-each-key-or-mouse-button-combination-can-only-be-used-once",
 				),
 			);
 			ui.add_space(4.0);

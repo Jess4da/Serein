@@ -2194,12 +2194,33 @@ mod tests {
 		}))
 		.unwrap();
 		assert_eq!(
-			lenient
-				.custom
-				.iter()
-				.map(|binding| binding.action)
-				.collect::<Vec<_>>(),
-			vec![model::KeybindAction::PushToTalk, model::KeybindAction::Bold]
+			lenient.custom,
+			vec![
+				model::CustomBinding {
+					action: model::KeybindAction::PushToTalk,
+					chord: model::KeyChord::new("Y", 0),
+				},
+				model::CustomBinding {
+					action: model::KeybindAction::Bold,
+					chord: model::KeyChord::new("G", 0),
+				},
+			]
+		);
+		// The saved file keeps the full action and chord of every extra binding.
+		let saved = AppPreferences {
+			keybinds: model::Keybinds {
+				custom: vec![model::CustomBinding {
+					action: model::KeybindAction::ToggleDeafen,
+					chord: model::KeyChord::new("F9", 0),
+				}],
+				..Default::default()
+			},
+			..Default::default()
+		};
+		store.save_app_preferences(&saved).unwrap();
+		assert_eq!(
+			store.app_preferences().unwrap().keybinds.custom,
+			saved.keybinds.custom
 		);
 		let mut value = AppPreferences {
 			language: Some("cs".into()),

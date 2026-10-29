@@ -1541,7 +1541,7 @@ keybinds-custom-row-remove = Quitar
 # Context: custom_section
 keybinds-custom-section-add-binding = Añadir atajo
 # Context: custom_section
-keybinds-custom-section-add-extra-shortcuts-for-any-action-each-key-or-mouse-button-can-only-be-used-once = Añade atajos extra para cualquier acción. Cada tecla o botón del ratón solo puede usarse una vez.
+keybinds-custom-section-add-extra-shortcuts-for-any-action-each-key-or-mouse-button-combination-can-only-be-used-once = Añade atajos extra para cualquier acción. Cada combinación de tecla o botón del ratón solo puede usarse una vez.
 # Context: custom_section
 keybinds-custom-section-custom-bindings = Atajos personalizados
 # Context: row

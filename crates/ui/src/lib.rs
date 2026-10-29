@@ -699,32 +699,38 @@ impl MessagingUi {
 			})
 	}
 
-	/// Returns focused-window mute/deafen presses that were not claimed by a native global hotkey.
-	pub fn voice_toggle_pressed(&self, ctx: &egui::Context, global_mask: u8) -> u8 {
+	/// Returns focused-window mute/deafen presses whose chord is not registered globally.
+	/// `registered_globally` answers per chord, so a focused custom chord still works while
+	/// only the built-in modifier chord is owned by the native registrar.
+	pub fn voice_toggle_pressed(
+		&self,
+		ctx: &egui::Context,
+		registered_globally: impl Fn(model::KeybindAction, &model::KeyChord) -> bool,
+	) -> u8 {
 		if !ctx.input(|input| input.focused) {
 			return 0;
 		}
 		let wants_keyboard = ctx.egui_wants_keyboard_input();
 		ctx.input_mut(|input| {
 			let mut toggles = 0;
-			if global_mask & 1 == 0
-				&& self
-					.keybinds
-					.chords(model::KeybindAction::ToggleMute)
-					.any(|chord| {
-						(!wants_keyboard || model::keybinds::is_mouse_button(&chord.key))
-							&& crate::keybinds::pressed(input, chord)
-					}) {
+			if self
+				.keybinds
+				.chords(model::KeybindAction::ToggleMute)
+				.any(|chord| {
+					!registered_globally(model::KeybindAction::ToggleMute, chord)
+						&& (!wants_keyboard || model::keybinds::is_mouse_button(&chord.key))
+						&& crate::keybinds::pressed(input, chord)
+				}) {
 				toggles |= 1;
 			}
-			if global_mask & 2 == 0
-				&& self
-					.keybinds
-					.chords(model::KeybindAction::ToggleDeafen)
-					.any(|chord| {
-						(!wants_keyboard || model::keybinds::is_mouse_button(&chord.key))
-							&& crate::keybinds::pressed(input, chord)
-					}) {
+			if self
+				.keybinds
+				.chords(model::KeybindAction::ToggleDeafen)
+				.any(|chord| {
+					!registered_globally(model::KeybindAction::ToggleDeafen, chord)
+						&& (!wants_keyboard || model::keybinds::is_mouse_button(&chord.key))
+						&& crate::keybinds::pressed(input, chord)
+				}) {
 				toggles |= 2;
 			}
 			toggles
@@ -4324,28 +4330,28 @@ impl MessagingUi {
 			.chords(model::KeybindAction::CopyIssueDiagnostics)
 			.cloned()
 			.collect();
-		let diagnostics_function_key = diagnostics_chords.iter().any(|chord| {
-			chord
-				.key
-				.strip_prefix('F')
-				.and_then(|number| number.parse::<u8>().ok())
-				.is_some_and(|number| (1..=35).contains(&number))
-		});
-		let diagnostics_allowed_in_context = diagnostics_function_key
-			|| diagnostics_chords.iter().any(|chord| {
-				chord.modifiers
-					& (model::keybinds::PRIMARY | model::keybinds::CTRL | model::keybinds::ALT)
-					!= 0
-			}) || (!ui.ctx().egui_wants_keyboard_input()
-			&& !ui.input(|input| {
+		// Text entry only suppresses plain chords; an F-key or modified chord keeps working.
+		let diagnostics_typing = ui.ctx().egui_wants_keyboard_input()
+			|| ui.input(|input| {
 				input
 					.events
 					.iter()
 					.any(|event| matches!(event, egui::Event::Text(_) | egui::Event::Paste(_)))
-			}));
+			});
+		let diagnostics_allowed = |chord: &model::KeyChord| {
+			let function_key = chord
+				.key
+				.strip_prefix('F')
+				.and_then(|number| number.parse::<u8>().ok())
+				.is_some_and(|number| (1..=35).contains(&number));
+			function_key
+				|| chord.modifiers
+					& (model::keybinds::PRIMARY | model::keybinds::CTRL | model::keybinds::ALT)
+					!= 0 || !diagnostics_typing
+		};
 		if self.keybind_capture.is_none()
 			&& !self.ime_active
-			&& diagnostics_allowed_in_context
+			&& diagnostics_chords.iter().any(&diagnostics_allowed)
 			&& ui.input(|input| {
 				input.focused
 					&& !input
@@ -4355,6 +4361,7 @@ impl MessagingUi {
 			}) && ui.input_mut(|input| {
 			diagnostics_chords
 				.iter()
+				.filter(|chord| diagnostics_allowed(chord))
 				.any(|chord| crate::keybinds::pressed_exact(input, chord))
 		}) {
 			self.copy_diagnostic_info(ui.ctx());
@@ -6053,6 +6060,51 @@ mod composer_tests {
 	}
 
 	#[test]
+	fn a_registered_global_mute_chord_does_not_hide_a_focused_custom_chord() {
+		let mut view = MessagingUi::default();
+		view.keybinds.toggle_mute =
+			model::KeyChord::new("M", model::keybinds::PRIMARY | model::keybinds::SHIFT);
+		view.keybinds.custom = vec![model::CustomBinding {
+			action: model::KeybindAction::ToggleMute,
+			chord: model::KeyChord::new("Y", 0),
+		}];
+		let registered = view.keybinds.toggle_mute.clone();
+		let ctx = egui::Context::default();
+		let pressed = |key: egui::Key, modifiers: egui::Modifiers, expected: u8| {
+			ctx.run_ui(
+				egui::RawInput {
+					focused: true,
+					events: vec![egui::Event::Key {
+						key,
+						physical_key: None,
+						pressed: true,
+						repeat: false,
+						modifiers,
+					}],
+					..Default::default()
+				},
+				|ui| {
+					assert_eq!(
+						view.voice_toggle_pressed(ui.ctx(), |action, chord| {
+							action == model::KeybindAction::ToggleMute && chord == &registered
+						}),
+						expected
+					);
+				},
+			)
+			.drop_without_applying_deltas();
+		};
+		// The plain custom chord still works while only the built-in chord is global.
+		pressed(egui::Key::Y, egui::Modifiers::NONE, 1);
+		// The globally registered chord is left to the native handler.
+		pressed(
+			egui::Key::M,
+			egui::Modifiers::COMMAND | egui::Modifiers::SHIFT,
+			0,
+		);
+	}
+
+	#[test]
 	fn a_custom_push_to_talk_chord_holds_in_the_focused_window() {
 		let mut view = MessagingUi::default();
 		view.keybinds.custom = vec![model::CustomBinding {
@@ -6077,6 +6129,15 @@ mod composer_tests {
 			)
 			.drop_without_applying_deltas();
 		}
+		// The key stays held across frames that carry no repeat event.
+		ctx.run_ui(
+			egui::RawInput {
+				focused: true,
+				..Default::default()
+			},
+			|ui| assert!(view.push_to_talk_down(ui.ctx())),
+		)
+		.drop_without_applying_deltas();
 	}
 
 	#[test]
@@ -6085,7 +6146,11 @@ mod composer_tests {
 		let mut state = edit_state();
 		state.demo = true;
 		let mut view = MessagingUi::default();
-		view.keybinds.copy_issue_diagnostics = model::KeyChord::new("C", 0);
+		view.keybinds.copy_issue_diagnostics = model::KeyChord::new("F12", 0);
+		view.keybinds.custom = vec![model::CustomBinding {
+			action: model::KeybindAction::CopyIssueDiagnostics,
+			chord: model::KeyChord::new("C", 0),
+		}];
 		for events in [
 			vec![],
 			vec![egui::Event::Text("seed".into())],

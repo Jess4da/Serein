@@ -1557,7 +1557,7 @@ keybinds-custom-row-remove = 移除
 # Context: custom_section
 keybinds-custom-section-add-binding = 添加绑定
 # Context: custom_section
-keybinds-custom-section-add-extra-shortcuts-for-any-action-each-key-or-mouse-button-can-only-be-used-once = 为任意操作添加额外的快捷键。每个按键或鼠标按钮只能使用一次。
+keybinds-custom-section-add-extra-shortcuts-for-any-action-each-key-or-mouse-button-combination-can-only-be-used-once = 为任意操作添加额外的快捷键。每个按键或鼠标按钮组合只能使用一次。
 # Context: custom_section
 keybinds-custom-section-custom-bindings = 自定义绑定
 # Context: row

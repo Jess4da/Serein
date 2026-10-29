@@ -1542,7 +1542,7 @@ keybinds-custom-row-remove = Kaldır
 # Context: custom_section
 keybinds-custom-section-add-binding = Kısayol ekle
 # Context: custom_section
-keybinds-custom-section-add-extra-shortcuts-for-any-action-each-key-or-mouse-button-can-only-be-used-once = Her eylem için ek kısayollar ekleyin. Her tuş veya fare düğmesi yalnızca bir kez kullanılabilir.
+keybinds-custom-section-add-extra-shortcuts-for-any-action-each-key-or-mouse-button-combination-can-only-be-used-once = Her eylem için ek kısayollar ekleyin. Her tuş veya fare düğmesi kombinasyonu yalnızca bir kez kullanılabilir.
 # Context: custom_section
 keybinds-custom-section-custom-bindings = Özel kısayollar
 # Context: row

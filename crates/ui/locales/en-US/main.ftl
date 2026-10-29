@@ -1553,7 +1553,7 @@ keybinds-custom-row-remove = Remove
 # Context: custom_section
 keybinds-custom-section-add-binding = Add binding
 # Context: custom_section
-keybinds-custom-section-add-extra-shortcuts-for-any-action-each-key-or-mouse-button-can-only-be-used-once = Add extra shortcuts for any action. Each key or mouse button can only be used once.
+keybinds-custom-section-add-extra-shortcuts-for-any-action-each-key-or-mouse-button-combination-can-only-be-used-once = Add extra shortcuts for any action. Each key or mouse-button combination can only be used once.
 # Context: custom_section
 keybinds-custom-section-custom-bindings = Custom bindings
 # Context: row

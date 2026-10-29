@@ -1541,7 +1541,7 @@ keybinds-custom-row-remove = Rimuovi
 # Context: custom_section
 keybinds-custom-section-add-binding = Aggiungi scorciatoia
 # Context: custom_section
-keybinds-custom-section-add-extra-shortcuts-for-any-action-each-key-or-mouse-button-can-only-be-used-once = Aggiungi scorciatoie extra per qualsiasi azione. Ogni tasto o pulsante del mouse può essere usato una sola volta.
+keybinds-custom-section-add-extra-shortcuts-for-any-action-each-key-or-mouse-button-combination-can-only-be-used-once = Aggiungi scorciatoie extra per qualsiasi azione. Ogni combinazione di tasto o pulsante del mouse può essere usata una sola volta.
 # Context: custom_section
 keybinds-custom-section-custom-bindings = Scorciatoie personalizzate
 # Context: row

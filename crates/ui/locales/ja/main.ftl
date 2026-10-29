@@ -1542,7 +1542,7 @@ keybinds-custom-row-remove = 削除
 # Context: custom_section
 keybinds-custom-section-add-binding = ショートカットを追加
 # Context: custom_section
-keybinds-custom-section-add-extra-shortcuts-for-any-action-each-key-or-mouse-button-can-only-be-used-once = 任意のアクションに追加のショートカットを割り当てます。キーやマウスボタンは1回しか使えません。
+keybinds-custom-section-add-extra-shortcuts-for-any-action-each-key-or-mouse-button-combination-can-only-be-used-once = 任意のアクションに追加のショートカットを割り当てます。キーやマウスボタンの組み合わせは1回しか使えません。
 # Context: custom_section
 keybinds-custom-section-custom-bindings = カスタムショートカット
 # Context: row

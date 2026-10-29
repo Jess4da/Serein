@@ -1542,7 +1542,7 @@ keybinds-custom-row-remove = Удалить
 # Context: custom_section
 keybinds-custom-section-add-binding = Добавить сочетание
 # Context: custom_section
-keybinds-custom-section-add-extra-shortcuts-for-any-action-each-key-or-mouse-button-can-only-be-used-once = Добавьте дополнительные сочетания для любого действия. Каждую клавишу или кнопку мыши можно использовать только один раз.
+keybinds-custom-section-add-extra-shortcuts-for-any-action-each-key-or-mouse-button-combination-can-only-be-used-once = Добавьте дополнительные сочетания для любого действия. Каждую комбинацию клавиши или кнопки мыши можно использовать только один раз.
 # Context: custom_section
 keybinds-custom-section-custom-bindings = Свои сочетания
 # Context: row
